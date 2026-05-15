@@ -10,11 +10,12 @@ const sortOptions = document.getElementById('sortOptions');
 const categoryForm = document.getElementById('categoryForm');
 const newCategoryInput = document.getElementById('newCategory');
 
-// State Management (Local Storage) [cite: 53]
+// State Management (Local Storage)
 let transactions = JSON.parse(localStorage.getItem('transactions')) || [];
 let categories = JSON.parse(localStorage.getItem('categories')) || ['Food', 'Transport', 'Fun'];
 let myChart = null;
 let isDarkMode = localStorage.getItem('theme') === 'dark';
+let spendingLimit = parseFloat(localStorage.getItem('spendingLimit')) || 0;
 
 // Initialization
 function init() {
@@ -23,16 +24,20 @@ function init() {
     renderTransactions();
     updateBalance();
     updateChart();
+    const limitInput = document.getElementById('spendingLimit');
+    if (limitInput && spendingLimit > 0) limitInput.value = spendingLimit;
+    updateLimitStatus();
 }
 
-// 1. Transaction Management
+// ─── 1. Transaction Management ───────────────────────────────────────────────
+
 transactionForm.addEventListener('submit', function(e) {
     e.preventDefault();
     const name = itemNameInput.value.trim();
     const amount = parseFloat(amountInput.value);
     const category = categoryInput.value;
 
-    if (name === '' || isNaN(amount)) return; // Validation [cite: 28]
+    if (name === '' || isNaN(amount) || amount <= 0) return;
 
     const transaction = {
         id: Date.now(),
@@ -47,7 +52,6 @@ transactionForm.addEventListener('submit', function(e) {
     renderTransactions();
     updateBalance();
     updateChart();
-    
     transactionForm.reset();
 });
 
@@ -59,14 +63,19 @@ function deleteTransaction(id) {
     updateChart();
 }
 
-// 2. Rendering & Sorting
+// ─── 2. Rendering & Sorting ───────────────────────────────────────────────────
+
+function formatDate(isoString) {
+    const d = new Date(isoString);
+    return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+}
+
 function renderTransactions() {
     transactionList.innerHTML = '';
-    
-    // Sorting logic
+
     let sortedTransactions = [...transactions];
     const sortVal = sortOptions.value;
-    
+
     if (sortVal === 'amount-desc') {
         sortedTransactions.sort((a, b) => b.amount - a.amount);
     } else if (sortVal === 'amount-asc') {
@@ -74,38 +83,76 @@ function renderTransactions() {
     } else if (sortVal === 'category') {
         sortedTransactions.sort((a, b) => a.category.localeCompare(b.category));
     } else {
-        // default 'date' (latest first)
         sortedTransactions.sort((a, b) => b.id - a.id);
+    }
+
+    if (transactions.length === 0) {
+        const empty = document.createElement('li');
+        empty.classList.add('empty-state');
+        transactionList.appendChild(empty);
+        return;
     }
 
     sortedTransactions.forEach(t => {
         const li = document.createElement('li');
         li.classList.add('transaction-item');
-        li.innerHTML = `
-            <div class="transaction-info">
-                <span class="transaction-name">${t.name}</span>
-                <span class="transaction-category">${t.category}</span>
-            </div>
-            <span class="transaction-amount">$${t.amount.toFixed(2)}</span>
-            <button class="btn-danger" onclick="deleteTransaction(${t.id})">Delete</button>
-        `;
+
+        // Left: info block
+        const info = document.createElement('div');
+        info.classList.add('transaction-info');
+
+        const nameSpan = document.createElement('span');
+        nameSpan.classList.add('transaction-name');
+        nameSpan.textContent = t.name;
+
+        const meta = document.createElement('div');
+        meta.classList.add('transaction-meta');
+
+        const catSpan = document.createElement('span');
+        catSpan.classList.add('transaction-category');
+        catSpan.textContent = t.category;
+
+        const dateSpan = document.createElement('span');
+        dateSpan.classList.add('transaction-date');
+        dateSpan.textContent = formatDate(t.date);
+
+        meta.appendChild(catSpan);
+        meta.appendChild(dateSpan);
+        info.appendChild(nameSpan);
+        info.appendChild(meta);
+
+        // Right: amount + delete
+        const amountSpan = document.createElement('span');
+        amountSpan.classList.add('transaction-amount');
+        amountSpan.textContent = `$${t.amount.toFixed(2)}`;
+
+        const deleteBtn = document.createElement('button');
+        deleteBtn.classList.add('btn-danger');
+        deleteBtn.textContent = 'Delete';
+        deleteBtn.addEventListener('click', () => deleteTransaction(t.id));
+
+        li.appendChild(info);
+        li.appendChild(amountSpan);
+        li.appendChild(deleteBtn);
         transactionList.appendChild(li);
     });
 }
 
 sortOptions.addEventListener('change', renderTransactions);
 
-// 3. Balance Calculation [cite: 35-37]
+// ─── 3. Balance Calculation ───────────────────────────────────────────────────
+
 function updateBalance() {
     const total = transactions.reduce((acc, t) => acc + t.amount, 0);
     totalBalanceEl.innerText = `$${total.toFixed(2)}`;
+    updateLimitStatus();
 }
 
-// 4. Chart Visualization [cite: 38-40]
+// ─── 4. Chart Visualization ───────────────────────────────────────────────────
+
 function updateChart() {
     const ctx = document.getElementById('expenseChart').getContext('2d');
-    
-    // Aggregate amounts by category
+
     const categoryTotals = {};
     transactions.forEach(t => {
         categoryTotals[t.category] = (categoryTotals[t.category] || 0) + t.amount;
@@ -114,14 +161,11 @@ function updateChart() {
     const labels = Object.keys(categoryTotals);
     const data = Object.values(categoryTotals);
 
-    // Color palette generator based on theme
     const bgColors = [
-        '#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899', '#14b8a6'
+        '#6366f1', '#10b981', '#f59e0b', '#f43f5e', '#8b5cf6', '#ec4899', '#14b8a6', '#3b82f6'
     ];
 
-    if (myChart) {
-        myChart.destroy(); // Destroy previous instance before re-rendering
-    }
+    if (myChart) myChart.destroy();
 
     myChart = new Chart(ctx, {
         type: 'pie',
@@ -129,22 +173,40 @@ function updateChart() {
             labels: labels.length ? labels : ['No Data'],
             datasets: [{
                 data: data.length ? data : [1],
-                backgroundColor: data.length ? bgColors.slice(0, labels.length) : ['#e5e7eb'],
-                borderWidth: 1,
-                borderColor: isDarkMode ? '#1f2937' : '#ffffff'
+                backgroundColor: data.length ? bgColors.slice(0, labels.length) : ['#e2e8f0'],
+                borderWidth: 2,
+                borderColor: isDarkMode ? '#141927' : '#ffffff'
             }]
         },
         options: {
             responsive: true,
             maintainAspectRatio: false,
             plugins: {
-                legend: { position: 'bottom', labels: { color: isDarkMode ? '#f9fafb' : '#1f2937' } }
+                legend: {
+                    position: 'bottom',
+                    labels: {
+                        color: isDarkMode ? '#94a3b8' : '#475569',
+                        padding: 16,
+                        font: { size: 12, family: 'Inter, sans-serif' }
+                    }
+                },
+                tooltip: {
+                    callbacks: {
+                        label: function(context) {
+                            const val = context.parsed;
+                            const total = context.dataset.data.reduce((a, b) => a + b, 0);
+                            const pct = total > 0 ? ((val / total) * 100).toFixed(1) : 0;
+                            return ` $${val.toFixed(2)} (${pct}%)`;
+                        }
+                    }
+                }
             }
         }
     });
 }
 
-// 5. Custom Categories Management
+// ─── 5. Custom Categories ─────────────────────────────────────────────────────
+
 categoryForm.addEventListener('submit', function(e) {
     e.preventDefault();
     const newCat = newCategoryInput.value.trim();
@@ -161,30 +223,92 @@ function updateCategoryDropdown() {
     categories.forEach(cat => {
         const opt = document.createElement('option');
         opt.value = cat;
-        opt.innerText = cat;
+        opt.textContent = cat;
         categoryInput.appendChild(opt);
     });
 }
 
-// 6. Theme Toggle (Dark/Light)
+// ─── 6. Spending Limit ────────────────────────────────────────────────────────
+
+function updateLimitStatus() {
+    const limitStatus = document.getElementById('limitStatus');
+    if (!limitStatus) return;
+
+    const total = transactions.reduce((acc, t) => acc + t.amount, 0);
+
+    if (spendingLimit > 0) {
+        const percentage = ((total / spendingLimit) * 100).toFixed(1);
+        const remaining = spendingLimit - total;
+        if (total > spendingLimit) {
+            limitStatus.className = 'limit-status over-limit';
+            limitStatus.textContent = `⚠️ Over limit by $${Math.abs(remaining).toFixed(2)} (${percentage}%)`;
+        } else {
+            limitStatus.className = 'limit-status under-limit';
+            limitStatus.textContent = `✅ $${remaining.toFixed(2)} remaining (${percentage}% used)`;
+        }
+    } else {
+        limitStatus.className = 'limit-status';
+        limitStatus.textContent = '';
+    }
+}
+
+document.getElementById('setLimitBtn').addEventListener('click', () => {
+    const val = parseFloat(document.getElementById('spendingLimit').value);
+    if (!isNaN(val) && val >= 0) {
+        spendingLimit = val;
+        localStorage.setItem('spendingLimit', spendingLimit);
+        updateLimitStatus();
+    }
+});
+
+// ─── 7. Export to CSV ─────────────────────────────────────────────────────────
+
+document.getElementById('exportBtn').addEventListener('click', () => {
+    if (transactions.length === 0) {
+        alert('No transactions to export.');
+        return;
+    }
+
+    const header = ['Date', 'Item Name', 'Category', 'Amount'];
+    const rows = transactions.map(t => [
+        formatDate(t.date),
+        `"${t.name.replace(/"/g, '""')}"`,
+        t.category,
+        t.amount.toFixed(2)
+    ]);
+
+    const csvContent = [header, ...rows].map(r => r.join(',')).join('\n');
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `transactions_${new Date().toISOString().slice(0, 10)}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+});
+
+// ─── 8. Theme Toggle ──────────────────────────────────────────────────────────
+
 themeToggle.addEventListener('click', () => {
     isDarkMode = !isDarkMode;
     localStorage.setItem('theme', isDarkMode ? 'dark' : 'light');
     applyTheme();
-    updateChart(); // Re-render chart for text/border color update
+    updateChart();
 });
 
 function applyTheme() {
     if (isDarkMode) {
         document.body.setAttribute('data-theme', 'dark');
-        themeToggle.innerText = '☀️ Light Mode';
+        themeToggle.textContent = '☀️ Light Mode';
     } else {
         document.body.removeAttribute('data-theme');
-        themeToggle.innerText = '🌙 Dark Mode';
+        themeToggle.textContent = '🌙 Dark Mode';
     }
 }
 
-// Utilities
+// ─── Utilities ────────────────────────────────────────────────────────────────
+
 function saveData() {
     localStorage.setItem('transactions', JSON.stringify(transactions));
 }
