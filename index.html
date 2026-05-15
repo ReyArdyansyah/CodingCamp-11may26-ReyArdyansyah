@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Expense & Budget Visualizer</title>
+    <link rel="stylesheet" href="css/style.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>Expense & Budget Visualizer</h1>
+            <button id="themeToggle" class="btn-secondary">🌙 Dark Mode</button>
+        </header>
+
+        <section class="balance-card">
+            <h2>TOTAL BALANCE</h2>
+            <h1 id="totalBalance">$0.00</h1>
+        </section>
+
+        <div class="grid">
+            <aside class="sidebar">
+                <div class="card">
+                    <h3>Add Transaction</h3>
+                    <form id="transactionForm">
+                        <div class="form-group">
+                            <label for="itemName">Item Name</label>
+                            <input type="text" id="itemName" placeholder="e.g., Coffee" required>
+                        </div>
+                        <div class="form-group">
+                            <label for="amount">Amount ($)</label>
+                            <input type="number" id="amount" step="0.01" placeholder="0.00" required>
+                        </div>
+                        <div class="form-group">
+                            <label for="category">Category</label>
+                            <select id="category" required>
+                                <option value="Food">Food</option>
+                                <option value="Transport">Transport</option>
+                                <option value="Fun">Fun</option>
+                            </select>
+                        </div>
+                        <button type="submit" class="btn-primary">Add Transaction</button>
+                    </form>
+                </div>
+
+                <div class="card">
+                    <h3>Add Custom Category</h3>
+                    <form id="categoryForm">
+                        <div class="form-group">
+                            <input type="text" id="newCategory" placeholder="New Category Name" required>
+                        </div>
+                        <button type="submit" class="btn-secondary">Add Category</button>
+                    </form>
+                </div>
+            </aside>
+
+            <main class="content">
+                <div class="card chart-card">
+                    <h3>Spending by Category</h3>
+                    <div class="chart-container">
+                        <canvas id="expenseChart"></canvas>
+                    </div>
+                </div>
+
+                <div class="card">
+                    <div class="list-header">
+                        <h3>Transactions</h3>
+                        <select id="sortOptions" class="sort-select">
+                            <option value="date">Sort by Latest</option>
+                            <option value="amount-desc">Amount: High to Low</option>
+                            <option value="amount-asc">Amount: Low to High</option>
+                            <option value="category">Sort by Category</option>
+                        </select>
+                    </div>
+                    <ul id="transactionList" class="transaction-list">
+                        </ul>
+                </div>
+            </main>
+        </div>
+    </div>
+    <script src="js/script.js"></script>
+</body>
+</html>
